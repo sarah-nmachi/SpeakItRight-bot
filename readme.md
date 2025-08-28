@@ -65,7 +65,7 @@ If you don't have a Terminal opened, click '**Terminal**' ->  '**New Terminal**'
 | Storage account    | openaibot1sa001dsfwd   | storage account names must be between 3 and 24 characters in length and may contain numbers and lowercase letters only. Your storage account name must be unique within Azure                                                                                                                          |
 |                    |                        |Go to Storage Account created, Security & Network -> Access Keys -> Show and Copy Connection string. Put it in the local.settings.json
 | SA blob container  | history                |Go to Data Storage -> Containers and click '**+ Container**'                  |
-| Function           | OpenAIBot1-PRD-NEU-func     | Settings - Python, 3.11, NEU , Serverless = eventrdiven.  |
+| Function           | OpenAIBot1-PRD-NEU-func     | Settings - Python, 3.11, NEU , Serverless = event-driven.  |
 | Azure OpenAI       | Openaibot-prd-cae-openai | Check email from csgate@microsoft.com for the Region (We are pleased to inform you that you have been onboarded to Azure OpenAI Service GPT-4 in the CanadaEast region.) <BR>
 |||Go to Keys and Deployments and copy Key1 and Endpoint to your local.settings.json. <BR>
 |||If you don't have access -  submit this form to request access to OpenAI. [Request Access to OpenAI Service](https://customervoice.microsoft.com/Pages/ResponsePage.aspx?id=v4j5cvGGr0GRqy180BHbR7en2Ais5pxKtso_Pz4b1_xUNTZBNzRKNlVQSFhZMU9aV09EVzYxWFdORCQlQCN0PWcu). Corporate subscription and email only. It may take a few days to complete <br>  |
@@ -79,7 +79,7 @@ If you don't have a Terminal opened, click '**Terminal**' ->  '**New Terminal**'
 2. Now we need to get a URL of the application we deployed. 
 Go to **'View'**, then **'Command Palette'**, and type '**Azure Functions: Copy Function URL**'. Again, choose your '**Subscription**', '**Function**' and application itself `http_trigger` by default. Paste the URL in the notepad, we will need it later. 
 
-# Part 3: Setting Up Telegram
+# Part 4: Setting Up Telegram
 
 Follow these steps to set up your bot on Telegram:
 
@@ -96,7 +96,7 @@ Follow these steps to set up your bot on Telegram:
 
 7. You can check the webhook setting by making another request: `https://api.telegram.org/bot<token>/getWebhookInfo`
 
-# Part 4: VS Code - uploading app settings to Azure Function
+# Part 5: VS Code - uploading app settings to Azure Function
 
 This marks the final stage of our workshop. 
 Our application has been successfully deployed. Now, it's time to configure all the settings we've defined in the `local.settings.json` file.
