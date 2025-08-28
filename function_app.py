@@ -21,17 +21,36 @@ def http_trigger(req: func.HttpRequest) -> func.HttpResponse:
 
         try:
             # Check if the update contains a message
-            if update['message']:
-                # Extract the username, user id, and chat id from the message
-                username = update['message']['from']['first_name']
-                user_id = update['message']['from']['id']
-                chat_id = update['message']['chat']['id']
+            if update and 'message' in update and update['message']:
+                # Extract the username, user id, and chat id from the message with proper null checks
+                message = update['message']
+                
+                # Safely extract user information
+                if 'from' not in message or not message['from']:
+                    logging.warning('Message missing from field')
+                    return func.HttpResponse(status_code=200)
+                
+                if 'chat' not in message or not message['chat']:
+                    logging.warning('Message missing chat field')
+                    return func.HttpResponse(status_code=200)
+                
+                if 'text' not in message:
+                    logging.warning('Message missing text field')
+                    return func.HttpResponse(status_code=200)
+                
+                username = message['from'].get('first_name', 'Unknown')
+                user_id = message['from'].get('id')
+                chat_id = message['chat'].get('id')
+                
+                if not user_id or not chat_id:
+                    logging.warning('Missing required user_id or chat_id')
+                    return func.HttpResponse(status_code=200)
 
                 # Create a file prefix using the username and user id
                 fileprefix = f'{username}_{user_id}'
 
                 # Log the received message
-                logging.log(logging.INFO, f'User {username} with id {user_id} sent a message: {update["message"]["text"]}')
+                logging.info(f'User {username} with id {user_id} sent a message: {message["text"]}')
 
                 # Get the Azure storage connection string from environment variables
                 connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
@@ -43,7 +62,7 @@ def http_trigger(req: func.HttpRequest) -> func.HttpResponse:
                 blob_client = blob_service_client.get_blob_client("history", f'{fileprefix}_history.txt')
                 
                 # Call the message_next function to process the message
-                message_next(chat_id, bot_token, update['message']['text'], fileprefix, blob_client)
+                message_next(chat_id, bot_token, message['text'], fileprefix, blob_client)
 
                 # Return a 200 OK response
                 return func.HttpResponse(status_code=200)
@@ -79,11 +98,13 @@ def message_next(chat_id, bot_token, text, fileprefix, blob_client):
             # Download the blob and split it into lines
             conversation = blob_client.download_blob().readall().decode('utf-8')
             lines = conversation.split('\n')
-            conversation = [json.loads(line) for line in lines]
+            # Filter out empty lines before JSON parsing
+            conversation = [json.loads(line) for line in lines if line.strip()]
 
             # Check if the previous user input is the same as the current one
-            if conversation[-2]["content"] == text:
-                logging.warn('The text is the same as the previous user content in the history file')
+            # Only check if we have at least 2 messages in conversation
+            if len(conversation) >= 2 and conversation[-2]["content"] == text:
+                logging.warning('The text is the same as the previous user content in the history file')
                 return func.HttpResponse(status_code=200)
 
     # Append the user's text to the conversation
@@ -91,25 +112,49 @@ def message_next(chat_id, bot_token, text, fileprefix, blob_client):
     conversation = conversation[-4:]
 
     # Read the prompt from the file and add it to the query
-    with open(f'prompt_english.txt', 'r') as f:
-        query = [{"role": "system", "content": f.read().strip()}]
+    # Use absolute path that works in Azure Functions environment
+    try:
+        import os
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        prompt_file_path = os.path.join(script_dir, 'prompt_english.txt')
+        with open(prompt_file_path, 'r') as f:
+            query = [{"role": "system", "content": f.read().strip()}]
+            query.extend(conversation)
+    except FileNotFoundError:
+        logging.error(f'Prompt file not found at {prompt_file_path}')
+        # Use a default system prompt if file is missing
+        query = [{"role": "system", "content": "You are a helpful English language assistant."}]
+        query.extend(conversation)
+    except Exception as e:
+        logging.error(f'Error reading prompt file: {e}')
+        # Use a default system prompt if there's any other error
+        query = [{"role": "system", "content": "You are a helpful English language assistant."}]
         query.extend(conversation)
 
     # Get the response from the AI model
-    response = get_response(query)
+    try:
+        response = get_response(query)
+    except Exception as e:
+        logging.error(f'Error getting response from AI model: {e}')
+        bot.send_message(chat_id, "Sorry, I encountered an error processing your request. Please try again.")
+        return
 
     # Send the response to the user
     # Log the response message
-    logging.log(logging.INFO, f'Response: {response}')
+    logging.info(f'Response: {response}')
     bot.send_message(chat_id, response, parse_mode="Markdown")
 
     # Append the assistant's response to the conversation
     conversation.append({"role": "assistant", "content": response})
 
     # Convert the conversation to JSON and upload it to the blob
-    conversation = [json.dumps(message) for message in conversation]
-    conversation = "\n".join(conversation)
-    blob_client.upload_blob(conversation, overwrite=True)
+    try:
+        conversation = [json.dumps(message) for message in conversation]
+        conversation = "\n".join(conversation)
+        blob_client.upload_blob(conversation, overwrite=True)
+    except Exception as e:
+        logging.error(f'Error uploading conversation to blob storage: {e}')
+        # Continue execution even if blob upload fails
 
 def get_response(conversation):
     """
